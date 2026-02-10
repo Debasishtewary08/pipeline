@@ -2,49 +2,56 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "prasad67/maven-web-app"
+        IMAGE_NAME = "amazon"
+        CONTAINER_NAME = "azure"
+        HOST_PORT = "6060"
+        CONTAINER_PORT = "8080"
     }
 
     stages {
 
-        stage('Checkout Code') {
+        stage('Clone') {
             steps {
-                checkout scm
+                git 'https://github.com/Debasishtewary08/pipeline.git'
             }
         }
 
-        stage('Build WAR') {
+        stage('Maven Build') {
             steps {
                 sh 'mvn clean package'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Stop & Remove Old Container') {
             steps {
                 sh '''
-                  docker build -t $IMAGE_NAME:${BUILD_NUMBER} .
+                docker stop $CONTAINER_NAME || true
+                docker rm $CONTAINER_NAME || true
                 '''
             }
         }
 
-        stage('Login to Docker Hub') {
+        stage('Remove Old Image') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh '''
-                      echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                    '''
-                }
+                sh '''
+                docker rmi $IMAGE_NAME || true
+                '''
             }
         }
 
-        stage('Push Image to Docker Hub') {
+        stage('Docker Image Build') {
+            steps {
+                sh 'docker build -t $IMAGE_NAME .'
+            }
+        }
+
+        stage('Docker Deploy') {
             steps {
                 sh '''
-                  docker push $IMAGE_NAME:${BUILD_NUMBER}
+                docker run -d \
+                -p $HOST_PORT:$CONTAINER_PORT \
+                --name $CONTAINER_NAME \
+                $IMAGE_NAME
                 '''
             }
         }
